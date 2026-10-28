@@ -1,4 +1,4 @@
-# SanketISL: AI-Powered Indian Sign Language Sign-to-Speech Translator
+# AI-Powered Indian Sign Language Sign-to-Speech Translator
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
 [![Node.js 18+](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
@@ -15,7 +15,7 @@
 
 Communication barriers in critical public scenarios—such as hospitals, banks, government administrative centers, and schools—frequently isolate deaf and hard-of-hearing individuals. When certified ISL interpreters are unavailable, simple tasks like conveying medical symptoms, verifying a bank PIN, or completing a government form become stressful hurdles.
 
-**SanketISL** bridges this gap:
+bridges this gap:
 1. Captures live hand gestures via standard browser webcams.
 2. Performs real-time machine learning inference using a fine-tuned Vision Transformer (`ViT-Base-Patch16-224`) trained specifically on Indian Sign Language.
 3. Automatically stabilizes and deduplicates held signs using temporal streak filtering.
