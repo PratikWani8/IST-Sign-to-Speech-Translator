@@ -119,29 +119,60 @@ export const useCamera = () => {
   }, [selectedDeviceId, facingMode, stopCamera, refreshDevices]);
 
   // Capture a current video frame as base64 JPEG
-  const captureFrame = useCallback((targetWidth = 320, targetHeight = 240) => {
-    if (!videoRef.current || !isActive || videoRef.current.readyState < 2) {
-      return null;
-    }
+  // Supports ROI guide box cropping and mirroring for optimal ViT hand recognition
+  const captureFrame = useCallback(
+    (targetWidth = 224, targetHeight = 224, cropToGuideBox = true, mirror = true) => {
+      if (!videoRef.current || !isActive || videoRef.current.readyState < 2) {
+        return null;
+      }
 
-    const video = videoRef.current;
-    if (!canvasRef.current) {
-      canvasRef.current = document.createElement('canvas');
-    }
+      const video = videoRef.current;
+      if (!canvasRef.current) {
+        canvasRef.current = document.createElement('canvas');
+      }
 
-    const canvas = canvasRef.current;
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
+      const canvas = canvasRef.current;
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
 
-    // Draw video frame onto canvas
-    ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+      const videoWidth = video.videoWidth || 640;
+      const videoHeight = video.videoHeight || 480;
 
-    // Return as base64 JPEG with high quality
-    return canvas.toDataURL('image/jpeg', 0.85);
-  }, [isActive]);
+      let sx = 0;
+      let sy = 0;
+      let sWidth = videoWidth;
+      let sHeight = videoHeight;
+
+      if (cropToGuideBox) {
+        // Crop the central square corresponding to the on-screen hand guide box
+        const boxSize = Math.round(Math.min(videoWidth, videoHeight) * 0.68);
+        sx = Math.round((videoWidth - boxSize) / 2);
+        sy = Math.round((videoHeight - boxSize) / 2);
+        sWidth = boxSize;
+        sHeight = boxSize;
+      }
+
+      ctx.clearRect(0, 0, targetWidth, targetHeight);
+
+      if (mirror) {
+        // Match user's selfie-mirrored perspective so orientation matches on-screen gesture
+        ctx.save();
+        ctx.translate(targetWidth, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
+        ctx.restore();
+      } else {
+        ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
+      }
+
+      // Return high quality base64 JPEG
+      return canvas.toDataURL('image/jpeg', 0.88);
+    },
+    [isActive]
+  );
 
   // Cleanup tracks on unmount
   useEffect(() => {
