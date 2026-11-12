@@ -8,6 +8,9 @@ import {
   Scan,
   Maximize2,
   CheckCircle2,
+  Crop,
+  FlipHorizontal,
+  BookOpen,
 } from 'lucide-react';
 
 export const CameraView = ({
@@ -23,11 +26,16 @@ export const CameraView = ({
   isInferring,
   activeSign,
   isConfident,
+  cropToGuideBox = true,
+  onToggleCrop,
+  mirror = true,
+  onToggleMirror,
+  onOpenSignGuide,
 }) => {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
       {/* Top Header & Controls */}
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+      <div className="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50/50">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5">
             <span
@@ -45,15 +53,57 @@ export const CameraView = ({
           </div>
 
           {isActive && (
-            <span className="text-[11px] bg-slate-200/70 text-slate-700 px-2 py-0.5 rounded-full">
-              4:3 Capture
+            <span className="text-[11px] bg-slate-200/70 text-slate-700 px-2 py-0.5 rounded-full font-mono">
+              224x224 ViT
             </span>
           )}
         </div>
 
-        {/* Camera Selector */}
-        {devices.length > 1 && (
-          <div className="flex items-center gap-2">
+        {/* Framing & Mode Toggles */}
+        <div className="flex items-center gap-2">
+          {isActive && onToggleCrop && (
+            <button
+              onClick={onToggleCrop}
+              title="Toggle between cropping the hand inside the guide box vs full camera frame"
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                cropToGuideBox
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <Crop className="w-3.5 h-3.5" />
+              <span>{cropToGuideBox ? 'Hand ROI (Cropped)' : 'Full Camera'}</span>
+            </button>
+          )}
+
+          {isActive && onToggleMirror && (
+            <button
+              onClick={onToggleMirror}
+              title="Toggle horizontal mirroring for left/right hand orientation"
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                mirror
+                  ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <FlipHorizontal className="w-3.5 h-3.5" />
+              <span>{mirror ? 'Mirrored' : 'Normal'}</span>
+            </button>
+          )}
+
+          {onOpenSignGuide && (
+            <button
+              onClick={onOpenSignGuide}
+              title="View all 35 supported ISL hand sign postures"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-colors"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Sign Guide</span>
+            </button>
+          )}
+
+          {/* Camera Selector */}
+          {devices.length > 1 && (
             <select
               value={selectedDeviceId}
               onChange={(e) => onDeviceChange(e.target.value)}
@@ -66,8 +116,8 @@ export const CameraView = ({
                 </option>
               ))}
             </select>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Video Viewport Area */}
@@ -78,28 +128,56 @@ export const CameraView = ({
           playsInline
           muted
           autoPlay
-          className={`w-full h-full object-cover transform -scale-x-100 transition-opacity duration-300 ${
-            isActive ? 'opacity-100' : 'opacity-0 absolute'
-          }`}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${
+            mirror ? 'transform -scale-x-100' : ''
+          } ${isActive ? 'opacity-100' : 'opacity-0 absolute'}`}
         />
 
         {/* Framing & Target Overlay for ISL Signs */}
         {isActive && (
           <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6">
-            <div className="w-64 h-64 border-2 border-dashed border-emerald-400/60 rounded-3xl relative flex items-center justify-center">
+            <div
+              className={`w-64 h-64 rounded-3xl relative flex items-center justify-center transition-all ${
+                cropToGuideBox
+                  ? 'border-2 border-dashed border-emerald-400/80 shadow-[0_0_20px_rgba(16,185,129,0.2)]'
+                  : 'border border-dashed border-slate-400/40'
+              }`}
+            >
               {/* Corner Accents */}
-              <div className="absolute -top-1 -left-1 w-4 h-4 border-t-3 border-l-3 border-emerald-400" />
-              <div className="absolute -top-1 -right-1 w-4 h-4 border-t-3 border-r-3 border-emerald-400" />
-              <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-3 border-l-3 border-emerald-400" />
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-3 border-r-3 border-emerald-400" />
+              <div
+                className={`absolute -top-1 -left-1 w-4 h-4 border-t-3 border-l-3 ${
+                  cropToGuideBox ? 'border-emerald-400' : 'border-slate-400'
+                }`}
+              />
+              <div
+                className={`absolute -top-1 -right-1 w-4 h-4 border-t-3 border-r-3 ${
+                  cropToGuideBox ? 'border-emerald-400' : 'border-slate-400'
+                }`}
+              />
+              <div
+                className={`absolute -bottom-1 -left-1 w-4 h-4 border-b-3 border-l-3 ${
+                  cropToGuideBox ? 'border-emerald-400' : 'border-slate-400'
+                }`}
+              />
+              <div
+                className={`absolute -bottom-1 -right-1 w-4 h-4 border-b-3 border-r-3 ${
+                  cropToGuideBox ? 'border-emerald-400' : 'border-slate-400'
+                }`}
+              />
 
-              <span className="text-[11px] font-medium text-emerald-200/80 bg-slate-900/60 backdrop-blur-xs px-2.5 py-1 rounded-full absolute -top-3.5">
-                Align Hand Inside Box
+              <span
+                className={`text-[11px] font-medium backdrop-blur-xs px-2.5 py-1 rounded-full absolute -top-3.5 ${
+                  cropToGuideBox
+                    ? 'text-emerald-200 bg-emerald-950/80 border border-emerald-500/30'
+                    : 'text-slate-300 bg-slate-900/80'
+                }`}
+              >
+                {cropToGuideBox ? 'Align Hand Inside Guide Box' : 'Full Frame Capture'}
               </span>
 
               {/* Real-time sign flash inside overlay */}
               {activeSign && isConfident && (
-                <div className="w-16 h-16 rounded-2xl bg-emerald-600/90 text-white font-bold text-3xl flex items-center justify-center shadow-lg border border-emerald-300/40">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-600/90 text-white font-bold text-3xl flex items-center justify-center shadow-lg border border-emerald-300/40 animate-scale-up">
                   {activeSign}
                 </div>
               )}
