@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useCamera } from '../hooks/useCamera';
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
 import { useAuth } from '../context/AuthContext';
-import { aiService, translationService } from '../services/api';
+import { aiService, translationService, vocabularyService } from '../services/api';
 import { CameraView } from '../components/CameraView';
 import { TranslationPanel } from '../components/TranslationPanel';
 import { SentenceBuilder } from '../components/SentenceBuilder';
 import { SpeechControls } from '../components/SpeechControls';
 import { ConfidenceIndicator } from '../components/ConfidenceIndicator';
+import { SignDemonstration } from '../components/SignDemonstration';
 import {
   Sparkles,
   Sliders,
@@ -16,6 +17,9 @@ import {
   AlertTriangle,
   History,
   Info,
+  X,
+  BookOpen,
+  Search,
 } from 'lucide-react';
 
 export const Translator = () => {
@@ -54,10 +58,38 @@ export const Translator = () => {
   } = useSpeechSynthesis(user?.preferredSpeechLanguage || 'en-IN');
 
   // Translation State
-  const [selectedCategory, setSelectedCategory] = useState('everyday');
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.55);
   const [autoInsertEnabled, setAutoInsertEnabled] = useState(true);
   const [sampleIntervalMs, setSampleIntervalMs] = useState(600); // 600ms sampling
+
+  // ROI Crop & Mirror settings for optimal ViT hand recognition
+  const [cropToGuideBox, setCropToGuideBox] = useState(true);
+  const [mirrorCapture, setMirrorCapture] = useState(true);
+
+  // Sign Reference Modal State
+  const [showSignGuide, setShowSignGuide] = useState(false);
+  const [guideVocabulary, setGuideVocabulary] = useState([]);
+  const [guideSearch, setGuideSearch] = useState('');
+  const [selectedGuideSign, setSelectedGuideSign] = useState(null);
+
+  // Load vocabulary for sign guide
+  useEffect(() => {
+    const loadVocab = async () => {
+      try {
+        const res = await vocabularyService.getVocabulary();
+        if (res.success && res.vocabulary) {
+          setGuideVocabulary(res.vocabulary);
+          if (res.vocabulary.length > 0) {
+            setSelectedGuideSign(res.vocabulary[0]);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load vocabulary guide:', err);
+      }
+    };
+    loadVocab();
+  }, []);
 
   // Live inference state
   const [isInferring, setIsInferring] = useState(false);
@@ -132,7 +164,8 @@ export const Translator = () => {
         // Prevent overlapping inference requests
         if (isInferringLockRef.current) return;
 
-        const frameBase64 = captureFrame(224, 224);
+        // Capture frame with guide box crop and mirroring
+        const frameBase64 = captureFrame(224, 224, cropToGuideBox, mirrorCapture);
         if (!frameBase64) return;
 
         isInferringLockRef.current = true;
@@ -210,6 +243,8 @@ export const Translator = () => {
   }, [
     isCameraActive,
     captureFrame,
+    cropToGuideBox,
+    mirrorCapture,
     selectedCategory,
     confidenceThreshold,
     autoInsertEnabled,
@@ -297,6 +332,11 @@ export const Translator = () => {
             isInferring={isInferring}
             activeSign={currentSign}
             isConfident={isConfident}
+            cropToGuideBox={cropToGuideBox}
+            onToggleCrop={() => setCropToGuideBox((prev) => !prev)}
+            mirror={mirrorCapture}
+            onToggleMirror={() => setMirrorCapture((prev) => !prev)}
+            onOpenSignGuide={() => setShowSignGuide(true)}
           />
 
           <ConfidenceIndicator
@@ -359,11 +399,33 @@ export const Translator = () => {
             <div className="flex items-center justify-between font-semibold text-slate-700">
               <span className="flex items-center gap-1.5">
                 <Sliders className="w-3.5 h-3.5 text-slate-400" />
-                Stability & Cooldown Settings
+                Stability & Vision Calibration
               </span>
             </div>
 
             <div className="space-y-2 pt-1 border-t border-slate-200/60 text-slate-600">
+              <label className="flex items-center justify-between cursor-pointer">
+                <span title="Crops around the guide box so the hand occupies >70% of the frame">
+                  Guide Box Hand Crop (Recommended):
+                </span>
+                <input
+                  type="checkbox"
+                  checked={cropToGuideBox}
+                  onChange={(e) => setCropToGuideBox(e.target.checked)}
+                  className="rounded-sm text-emerald-700 focus:ring-emerald-600"
+                />
+              </label>
+
+              <label className="flex items-center justify-between cursor-pointer">
+                <span>Mirrored Capture:</span>
+                <input
+                  type="checkbox"
+                  checked={mirrorCapture}
+                  onChange={(e) => setMirrorCapture(e.target.checked)}
+                  className="rounded-sm text-emerald-700 focus:ring-emerald-600"
+                />
+              </label>
+
               <label className="flex items-center justify-between cursor-pointer">
                 <span>Auto-insert on steady hold (1.2s):</span>
                 <input
@@ -381,7 +443,7 @@ export const Translator = () => {
                 </div>
                 <input
                   type="range"
-                  min="0.40"
+                  min="0.35"
                   max="0.85"
                   step="0.05"
                   value={confidenceThreshold}
@@ -393,6 +455,140 @@ export const Translator = () => {
           </div>
         </div>
       </div>
+
+      {/* Quick Sign Reference Cheat-sheet Modal */}
+      {showSignGuide && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden animate-scale-up">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    ISL Hand Sign Reference Guide (35 Signs)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Inspect standard Indian Sign Language hand postures for all digits and alphabets
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowSignGuide(false)}
+                className="w-8 h-8 rounded-full bg-slate-200/70 hover:bg-slate-300 flex items-center justify-center text-slate-600 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body: Split view of signs and posture details */}
+            <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-12 gap-6">
+              {/* Left Column: Sign Token Grid */}
+              <div className="md:col-span-7 space-y-4">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="text"
+                    value={guideSearch}
+                    onChange={(e) => setGuideSearch(e.target.value)}
+                    placeholder="Search sign (e.g. A, 1, fist, thumb)..."
+                    className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-1 focus:ring-emerald-600 focus:outline-hidden"
+                  />
+                </div>
+
+                <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                  <div>
+                    <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                      Numeric Signs (1-9)
+                    </h5>
+                    <div className="grid grid-cols-5 gap-2">
+                      {guideVocabulary
+                        .filter((v) => v.type === 'digit')
+                        .filter(
+                          (v) =>
+                            !guideSearch.trim() ||
+                            v.id.toLowerCase().includes(guideSearch.toLowerCase()) ||
+                            v.name.toLowerCase().includes(guideSearch.toLowerCase()) ||
+                            v.description.toLowerCase().includes(guideSearch.toLowerCase())
+                        )
+                        .map((v) => (
+                          <button
+                            key={v.id}
+                            onClick={() => setSelectedGuideSign(v)}
+                            className={`p-2.5 rounded-xl border text-center transition-all ${
+                              selectedGuideSign?.id === v.id
+                                ? 'bg-emerald-800 text-white border-emerald-900 shadow-sm'
+                                : 'bg-slate-50 hover:bg-emerald-50/60 border-slate-200 text-slate-800'
+                            }`}
+                          >
+                            <span className="text-lg font-black font-mono block">{v.id}</span>
+                            <span className="text-[10px] opacity-75 truncate block">{v.name}</span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                      Alphabetic Signs (A-Z)
+                    </h5>
+                    <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
+                      {guideVocabulary
+                        .filter((v) => v.type === 'letter')
+                        .filter(
+                          (v) =>
+                            !guideSearch.trim() ||
+                            v.id.toLowerCase().includes(guideSearch.toLowerCase()) ||
+                            v.name.toLowerCase().includes(guideSearch.toLowerCase()) ||
+                            v.description.toLowerCase().includes(guideSearch.toLowerCase())
+                        )
+                        .map((v) => (
+                          <button
+                            key={v.id}
+                            onClick={() => setSelectedGuideSign(v)}
+                            className={`p-2.5 rounded-xl border text-center transition-all ${
+                              selectedGuideSign?.id === v.id
+                                ? 'bg-emerald-800 text-white border-emerald-900 shadow-sm'
+                                : 'bg-slate-50 hover:bg-emerald-50/60 border-slate-200 text-slate-800'
+                            }`}
+                          >
+                            <span className="text-lg font-black font-mono block">{v.id}</span>
+                            <span className="text-[10px] opacity-75 truncate block">{v.name}</span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Selected Sign Details */}
+              <div className="md:col-span-5">
+                <SignDemonstration sign={selectedGuideSign} />
+                
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1">
+                  <span className="font-semibold block">Pro-Tip for Maximum Accuracy:</span>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Hold your hand firmly inside the green guide box with the palm and fingers clearly facing your camera under adequate lighting.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+              <button
+                onClick={() => setShowSignGuide(false)}
+                className="px-5 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold shadow-xs transition-colors"
+              >
+                Close & Return to Translator
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
