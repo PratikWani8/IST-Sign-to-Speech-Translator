@@ -25,6 +25,7 @@ export const TranslationPanel = ({
   isInferring = false,
 }) => {
   const categories = [
+    { id: 'all', label: 'All Signs (1-9, A-Z)' },
     { id: 'everyday', label: 'Everyday Life' },
     { id: 'healthcare', label: 'Hospital & Healthcare' },
     { id: 'banking', label: 'Banking & Finance' },
